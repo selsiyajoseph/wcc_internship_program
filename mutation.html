@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <p id="watchMe">Hello</p>
+<button onclick="change()">Click me!</button>
+
+<script>
+ 
+  const target = document.getElementById("watchMe");
+
+ 
+  const observer = new MutationObserver(() => {
+    alert("Something changed in the paragraph!");
+  });
+
+ 
+  observer.observe(target, { childList: true, characterData: true, subtree: true });
+
+  
+  function change() {
+    target.textContent = "I changed!";
+  }
+</script>
+
+</body>
+</html>
