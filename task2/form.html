@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Auto Form Submit</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+
+    form {
+      display: inline-block;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      background-color: #f9f9f9;
+    }
+
+    input {
+      padding: 8px;
+      margin: 10px 0;
+      width: 250px;
+      border-radius: 5px;
+      border: 1px solid #aaa;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #218838;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #success-message {
+      color: green;
+      font-weight: bold;
+      margin-top: 15px;
+    }
+  </style>
+
+  <script>
+    window.onload = function () {
+     
+      document.getElementById("name").value = "Selsiya";
+      document.getElementById("phone").value = "9876543210";
+      document.getElementById("email").value = "selsiya@example.com";
+
+      
+      setTimeout(function () {
+        document.getElementById("myForm").requestSubmit();
+      }, 1500);
+    };
+
+    function lockForm() {
+      
+      document.getElementById("name").disabled = true;
+      document.getElementById("phone").disabled = true;
+      document.getElementById("email").disabled = true;
+
+     
+      document.getElementById("submitBtn").classList.add("hidden");
+
+      
+      document.getElementById("success-message").textContent = "Form submitted successfully!";
+    }
+  </script>
+</head>
+<body>
+
+  <h2>Contact Form</h2>
+
+  <form id="myForm" onsubmit="event.preventDefault(); lockForm();" method="post">
+    <input type="text" id="name" name="name" placeholder="Enter your name"><br>
+    <input type="tel" id="phone" name="phone" placeholder="Enter your phone"><br>
+    <input type="email" id="email" name="email" placeholder="Enter your email"><br>
+    <button type="submit" id="submitBtn">Submit</button>
+  </form>
+
+  <div id="success-message"></div>
+
+</body>
+</html>
