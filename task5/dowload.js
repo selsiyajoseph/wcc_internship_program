@@ -32,7 +32,7 @@ async function automateMusicDownloadAndCreation() {
         .find(b => b.textContent.trim() === label);
       if (btn && !btn.disabled) {
         clearInterval(checkInterval);
-        console.log(`✅ '${label}' button is now active!`);
+        console.log(`'${label}' button is now active!`);
         callback();
       }
     }, 1200);
@@ -41,25 +41,25 @@ async function automateMusicDownloadAndCreation() {
   try {
     // Step 1: Choose the first song in the list
     const songGrid = await findElement(".react-aria-GridList");
-    if (!songGrid) throw new Error("❌ Song grid not detected!");
+    if (!songGrid) throw new Error("Song grid not detected!");
     const firstSongItem = songGrid.querySelector("[role='row'], .react-aria-GridListItem");
-    if (!firstSongItem) throw new Error("❌ No songs available!");
+    if (!firstSongItem) throw new Error(" No songs available!");
     simulateUserClick(firstSongItem);
     console.log("🎶 First song selected");
     await delay(400);
 
     // Step 2: Open More Options
     const optionsButton = firstSongItem.querySelector('button[aria-label="More Options"]');
-    if (!optionsButton) throw new Error("❌ Could not find More Options button!");
+    if (!optionsButton) throw new Error(" Could not find More Options button!");
     simulateUserClick(optionsButton);
-    console.log("🔽 More Options opened");
+    console.log(" More Options opened");
     await delay(400);
 
     // Step 3: Download song
     const downloadOption = await findElement('[data-testid="download-sub-trigger"]') 
                         || Array.from(document.querySelectorAll('span, button'))
                                 .find(el => el.textContent.trim().toLowerCase() === "download");
-    if (!downloadOption) throw new Error("❌ Download option missing!");
+    if (!downloadOption) throw new Error("Download option missing!");
     simulateUserClick(downloadOption);
     console.log("⬇ Download initiated");
     await delay(400);
@@ -67,7 +67,7 @@ async function automateMusicDownloadAndCreation() {
     // Step 4: Select MP3 format
     const mp3Option = Array.from(document.querySelectorAll("button, [role='menuitem'], span"))
       .find(el => el.textContent.toLowerCase().includes("mp3 audio"));
-    if (!mp3Option) throw new Error("❌ MP3 option not found!");
+    if (!mp3Option) throw new Error("MP3 option not found!");
     simulateUserClick(mp3Option);
     console.log("🎧 MP3 format chosen");
     await delay(400);
@@ -75,9 +75,9 @@ async function automateMusicDownloadAndCreation() {
     // Step 5: Confirm Download Anyway
     const confirmDownload = Array.from(document.querySelectorAll("button"))
       .find(el => el.textContent.toLowerCase().includes("download anyway"));
-    if (!confirmDownload) throw new Error("❌ 'Download Anyway' missing!");
+    if (!confirmDownload) throw new Error("'Download Anyway' missing!");
     simulateUserClick(confirmDownload);
-    console.log("✅ MP3 download confirmed");
+    console.log("MP3 download confirmed");
     await delay(400);
 
     console.log("🎉 Download complete! Moving to song creation...");
@@ -89,7 +89,7 @@ async function automateMusicDownloadAndCreation() {
     const createButton = document.querySelector('button[data-testid="create-button"]');
 
     if (!lyricsInput || !styleInput || !titleInput || !createButton) {
-      console.error("❌ Required fields/buttons for song creation not found!");
+      console.error(" Required fields/buttons for song creation not found!");
       return;
     }
 
@@ -116,22 +116,23 @@ async function automateMusicDownloadAndCreation() {
         lyrics: lyricsInput.value.trim(),
         style: styleInput.value.trim()
       };
-      console.log("📝 Song details ready:", songData);
-      console.log("✅ Song setup complete!");
+      console.log("Song details ready:", songData);
+      console.log("Song setup complete!");
     });
 
     const autoClickCreate = setInterval(() => {
       if (!createButton.disabled) {
         clearInterval(autoClickCreate);
-        console.log("▶ Pressing 'Create' to finalize song...");
+        console.log("Pressing 'Create' to finalize song...");
         createButton.click();
       }
     }, 250);
 
   } catch (error) {
-    console.error("❌ Automation error occurred:", error);
+    console.error("Automation error occurred:", error);
   }
 }
 
 // Execute the automation
 automateMusicDownloadAndCreation();
+
