@@ -52,7 +52,7 @@ async function automateMusicDownloadAndCreation() {
     const optionsButton = firstSongItem.querySelector('button[aria-label="More Options"]');
     if (!optionsButton) throw new Error(" Could not find More Options button!");
     simulateUserClick(optionsButton);
-    console.log(" More Options opened");
+    console.log("Options opened");
     await delay(400);
 
     // Step 3: Download song
@@ -61,7 +61,7 @@ async function automateMusicDownloadAndCreation() {
                                 .find(el => el.textContent.trim().toLowerCase() === "download");
     if (!downloadOption) throw new Error("Download option missing!");
     simulateUserClick(downloadOption);
-    console.log("⬇ Download initiated");
+    console.log("Dowload initiating");
     await delay(400);
 
     // Step 4: Select MP3 format
@@ -69,7 +69,7 @@ async function automateMusicDownloadAndCreation() {
       .find(el => el.textContent.toLowerCase().includes("mp3 audio"));
     if (!mp3Option) throw new Error("MP3 option not found!");
     simulateUserClick(mp3Option);
-    console.log("🎧 MP3 format chosen");
+    console.log("MP3 chosen");
     await delay(400);
 
     // Step 5: Confirm Download Anyway
@@ -77,10 +77,10 @@ async function automateMusicDownloadAndCreation() {
       .find(el => el.textContent.toLowerCase().includes("download anyway"));
     if (!confirmDownload) throw new Error("'Download Anyway' missing!");
     simulateUserClick(confirmDownload);
-    console.log("MP3 download confirmed");
+    console.log("download confirmed");
     await delay(400);
 
-    console.log("🎉 Download complete! Moving to song creation...");
+    console.log("Download complete!");
 
     // Step 6: Create a new song
     const lyricsInput = document.querySelector('textarea[data-testid="lyrics-input-textarea"]');
@@ -135,4 +135,5 @@ async function automateMusicDownloadAndCreation() {
 
 // Execute the automation
 automateMusicDownloadAndCreation();
+
 
