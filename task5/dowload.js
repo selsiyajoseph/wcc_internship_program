@@ -1,123 +1,137 @@
-// Utility function to update React-controlled inputs/textarea
-function updateReactInput(element, value) {
-  const proto = Object.getPrototypeOf(element);
-  const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
-  setter.call(element, value);
-  element.dispatchEvent(new Event("input", { bubbles: true }));
-}
+async function automateMusicDownloadAndCreation() {
+  console.log(".");
 
-// Simulate a real click
-function simulateClick(el) {
-  ["pointerdown", "mousedown", "mouseup", "click"].forEach(evt =>
-    el.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }))
-  );
-}
+  const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-// Watch for a new song in the song list
-function watchForNewSong(callback) {
-  const container = document.querySelector(".react-aria-GridList");
-  if (!container) {
-    console.error("Unable to locate song list container.");
-    return;
-  }
-
-  const observer = new MutationObserver(mutations => {
-    for (const mutation of mutations) {
-      mutation.addedNodes.forEach(node => {
-        if (node.nodeType === 1 && node.classList.contains("react-aria-GridListItem")) {
-          console.log("New song entry detected.");
-
-          const poll = setInterval(() => {
-            const titleElem = node.querySelector('span.line-clamp-1[title]');
-            const title = titleElem?.getAttribute("title") || "";
-
-            if (title && title !== "Untitled") {
-              clearInterval(poll);
-              observer.disconnect();
-              callback(node);
-            }
-          }, 200);
-        }
-      });
+  const findElement = async (selector, root = document, timeout = 6000) => {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeout) {
+      const element = root.querySelector(selector);
+      if (element) return element;
+      await delay(100);
     }
-  });
-
-  observer.observe(container, { childList: true, subtree: true });
-}
-
-// Function to download a song
-function downloadSong(songNode) {
-  try {
-    // Click More Options
-    const moreBtn = songNode.querySelector('button[aria-label*="More Options"]');
-    if (!moreBtn) throw "More Options button not found!";
-    simulateClick(moreBtn);
-
-    setTimeout(() => {
-      // Click Download
-      const downloadBtn = Array.from(document.querySelectorAll('button, span'))
-        .find(el => el.textContent.toLowerCase().includes("download"));
-      if (!downloadBtn) throw "Download button not found!";
-      simulateClick(downloadBtn);
-
-      setTimeout(() => {
-        // Click MP3 Audio
-        const mp3Btn = Array.from(document.querySelectorAll('button, span'))
-          .find(el => el.textContent.toLowerCase().includes("mp3 audio"));
-        if (!mp3Btn) throw "MP3 Audio button not found!";
-        simulateClick(mp3Btn);
-
-        setTimeout(() => {
-          // Click Download Anyway
-          const downloadAnywayBtn = Array.from(document.querySelectorAll('button'))
-            .find(el => el.textContent.toLowerCase().includes("download anyway"));
-          if (downloadAnywayBtn) simulateClick(downloadAnywayBtn);
-
-          console.log("✅ New song download triggered!");
-        }, 500);
-      }, 500);
-    }, 500);
-
-  } catch (err) {
-    console.error("❌ Error downloading song:", err);
-  }
-}
-
-// Main automation
-function runSongAutomation() {
-  const lyricsInput = document.querySelector('textarea[data-testid="lyrics-input-textarea"]');
-  const styleInput = document.querySelector('textarea[data-testid="tag-input-textarea"]');
-  const titleInput = document.querySelector('input[placeholder="Enter song title"]');
-  const createButton = document.querySelector('button[data-testid="create-button"]');
-
-  if (!lyricsInput || !styleInput || !titleInput || !createButton) {
-    console.error("One or more necessary inputs or buttons are missing.");
-    return;
-  }
-
-  // Fill song details
-  const songDetails = {
-    lyrics: "Golden waves crash on silver sands, the horizon sings with the colors of goodbye.",
-    style: "Cinematic Indie Rock",
-    title: "Horizon Goodbye"
+    return null;
   };
 
-  updateReactInput(lyricsInput, songDetails.lyrics);
-  updateReactInput(styleInput, songDetails.style);
-  updateReactInput(titleInput, songDetails.title);
+  const simulateUserClick = (element) => {
+    ["pointerdown", "mousedown", "mouseup", "click"].forEach(eventType => {
+      element.dispatchEvent(new MouseEvent(eventType, { bubbles: true, cancelable: true }));
+    });
+  };
 
-  // Watch for the newly created song
-  watchForNewSong(downloadSong);
+  const updateReactInput = (inputEl, value) => {
+    const proto = Object.getPrototypeOf(inputEl);
+    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+    setter.call(inputEl, value);
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+  };
 
-  // Click Create when ready
-  const checkButtonEnabled = setInterval(() => {
-    if (!createButton.disabled) {
-      clearInterval(checkButtonEnabled);
-      createButton.click();
-      console.log("▶ 'Create' clicked! Waiting for song to appear...");
+  const waitForButtonEnable = (label, callback) => {
+    const checkInterval = setInterval(() => {
+      const btn = Array.from(document.querySelectorAll("button"))
+        .find(b => b.textContent.trim() === label);
+      if (btn && !btn.disabled) {
+        clearInterval(checkInterval);
+        console.log(`✅ '${label}' button is now active!`);
+        callback();
+      }
+    }, 1200);
+  };
+
+  try {
+    // Step 1: Choose the first song in the list
+    const songGrid = await findElement(".react-aria-GridList");
+    if (!songGrid) throw new Error("❌ Song grid not detected!");
+    const firstSongItem = songGrid.querySelector("[role='row'], .react-aria-GridListItem");
+    if (!firstSongItem) throw new Error("❌ No songs available!");
+    simulateUserClick(firstSongItem);
+    console.log("🎶 First song selected");
+    await delay(400);
+
+    // Step 2: Open More Options
+    const optionsButton = firstSongItem.querySelector('button[aria-label="More Options"]');
+    if (!optionsButton) throw new Error("❌ Could not find More Options button!");
+    simulateUserClick(optionsButton);
+    console.log("🔽 More Options opened");
+    await delay(400);
+
+    // Step 3: Download song
+    const downloadOption = await findElement('[data-testid="download-sub-trigger"]') 
+                        || Array.from(document.querySelectorAll('span, button'))
+                                .find(el => el.textContent.trim().toLowerCase() === "download");
+    if (!downloadOption) throw new Error("❌ Download option missing!");
+    simulateUserClick(downloadOption);
+    console.log("⬇ Download initiated");
+    await delay(400);
+
+    // Step 4: Select MP3 format
+    const mp3Option = Array.from(document.querySelectorAll("button, [role='menuitem'], span"))
+      .find(el => el.textContent.toLowerCase().includes("mp3 audio"));
+    if (!mp3Option) throw new Error("❌ MP3 option not found!");
+    simulateUserClick(mp3Option);
+    console.log("🎧 MP3 format chosen");
+    await delay(400);
+
+    // Step 5: Confirm Download Anyway
+    const confirmDownload = Array.from(document.querySelectorAll("button"))
+      .find(el => el.textContent.toLowerCase().includes("download anyway"));
+    if (!confirmDownload) throw new Error("❌ 'Download Anyway' missing!");
+    simulateUserClick(confirmDownload);
+    console.log("✅ MP3 download confirmed");
+    await delay(400);
+
+    console.log("🎉 Download complete! Moving to song creation...");
+
+    // Step 6: Create a new song
+    const lyricsInput = document.querySelector('textarea[data-testid="lyrics-input-textarea"]');
+    const styleInput = document.querySelector('textarea[data-testid="tag-input-textarea"]');
+    const titleInput = document.querySelector('input[placeholder="Enter song title"]');
+    const createButton = document.querySelector('button[data-testid="create-button"]');
+
+    if (!lyricsInput || !styleInput || !titleInput || !createButton) {
+      console.error("❌ Required fields/buttons for song creation not found!");
+      return;
     }
-  }, 100);
+
+    const newLyrics = 
+      "Walking through the quiet streets at midnight,\n" +
+      "Your shadow dances softly under the lights,\n" +
+      "Every word you say becomes a tune,\n" +
+      "I hum along to the rhythm of the moon.\n\n" +
+      "Our laughter echoes through the empty square,\n" +
+      "Moments like this are beyond compare,\n" +
+      "If time pauses here, I’ll keep the melody alive,\n" +
+      "Every beat reminds me that we’re alive.";
+
+    const newStyle = "Indie, Chill, Acoustic Vibes, Soft Guitar";
+    const newTitle = "Midnight Whispers";
+
+    updateReactInput(lyricsInput, newLyrics);
+    updateReactInput(styleInput, newStyle);
+    updateReactInput(titleInput, newTitle);
+
+    waitForButtonEnable("Publish", () => {
+      const songData = {
+        title: titleInput.value.trim(),
+        lyrics: lyricsInput.value.trim(),
+        style: styleInput.value.trim()
+      };
+      console.log("📝 Song details ready:", songData);
+      console.log("✅ Song setup complete!");
+    });
+
+    const autoClickCreate = setInterval(() => {
+      if (!createButton.disabled) {
+        clearInterval(autoClickCreate);
+        console.log("▶ Pressing 'Create' to finalize song...");
+        createButton.click();
+      }
+    }, 250);
+
+  } catch (error) {
+    console.error("❌ Automation error occurred:", error);
+  }
 }
 
-// Start automation
-runSongAutomation();
+// Execute the automation
+automateMusicDownloadAndCreation();
