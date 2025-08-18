@@ -1,11 +1,9 @@
 import openai
-import os
 import tkinter as tk
 from tkinter import scrolledtext
 
-# API Setup
-api_key = os.getenv("OPENROUTER_API_KEY")
-openai.api_key = api_key
+# ✅ Permanent API Setup (hardcoded key)
+openai.api_key = "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"
 openai.api_base = "https://openrouter.ai/api/v1"
 
 messages = [{"role": "system", "content": "You are a helpful assistant."}]
@@ -22,7 +20,7 @@ def send_message():
 
     try:
         response = openai.ChatCompletion.create(
-            model="openai/gpt-3.5-turbo",  # You can change model here
+            model="gpt-3.5-turbo",  # ✅ You can change the model here if needed
             messages=messages,
             max_tokens=500
         )
