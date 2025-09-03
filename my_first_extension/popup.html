@@ -1,11 +1,25 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-  <head>
-    <title>Change Color</title>
-  </head>
-  <body>
-    <button id="changeColor">Change Background</button>
+<head>
+<meta charset="utf-8">
+<title>Teams Recorder</title>
+<style>
+  body { font-family: Arial; padding: 12px; width: 240px; }
+  button { width: 100%; padding: 8px; margin-top: 6px; }
+  label { display:block; margin-top:6px; cursor:pointer; }
+</style>
+</head>
+<body>
+  <h3>Record Options</h3>
+  <label><input type="radio" name="mode" value="audio"> Audio only</label>
+  <label><input type="radio" name="mode" value="video"> Video only</label>
+  <label><input type="radio" name="mode" value="both" checked> Audio + Video</label>
+  <label><input type="checkbox" id="autoStart"> Auto-start when meeting begins</label>
 
-    <script src="popup.js"></script>
-  </body>
+  <button id="startBtn">Start Recording</button>
+  <button id="stopBtn">Stop Recording</button>
+  <div id="status" style="margin-top:8px;font-size:12px;color:#444"></div>
+
+  <script src="popup.js"></script>
+</body>
 </html>
