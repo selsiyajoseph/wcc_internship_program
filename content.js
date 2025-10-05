@@ -2223,10 +2223,7 @@ function handleJoinButtonClick(event) {
       console.log("🎯 JOIN BUTTON CLICKED - User is joining meeting");
       console.log("⏰ Starting 3-second delay before recording...");
       
-      // Show immediate notification
-      showMeetingNotification("joining");
-      
-      // Start meeting after 3 seconds to allow meeting to load
+      // Start meeting after 3 seconds to allow meeting to load (NO NOTIFICATION)
       setTimeout(() => {
         meetingStarted();
       }, 3000); // 3 seconds delay
@@ -2389,25 +2386,7 @@ function showMeetingNotification(type) {
   
   const currentTime = new Date().toLocaleTimeString();
   
-  if (type === "joining") {
-    notification.style.cssText = `
-      position: fixed;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #FF9800;
-      color: white;
-      padding: 12px 18px;
-      border-radius: 8px;
-      z-index: 10000;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      font-weight: bold;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      border: 2px solid #F57C00;
-    `;
-    notification.textContent = `🟡 Joining Meeting - Recording starts in 3 seconds...`;
-  } else if (type === "started") {
+  if (type === "started") {
     notification.style.cssText = `
       position: fixed;
       top: 10px;
@@ -2451,7 +2430,7 @@ function showMeetingNotification(type) {
     if (notification.parentNode) {
       notification.parentNode.removeChild(notification);
     }
-  }, type === "joining" ? 3000 : 5000);
+  }, 5000);
 }
 
 function showRecordingNotification(type) {
