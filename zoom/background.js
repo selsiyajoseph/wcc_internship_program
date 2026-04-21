@@ -220,35 +220,32 @@ function startRecordingForTab(tabId) {
     }, (recorderTab) => {
       console.log("✅ Recorder tab opened for auto recording:", recorderTab.id);
       
-      const startRecording = (retryCount = 0) => {
-        chrome.tabs.sendMessage(recorderTab.id, { 
-          action: "startRecording", 
-          tabId: tabId,
-          autoRecord: true  // This flag is important
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.log(`❌ Recorder tab not ready (attempt ${retryCount + 1}/3), retrying...`);
-            if (retryCount < 2) {
-              setTimeout(() => startRecording(retryCount + 1), 1000);
-            } else {
-              console.error("❌ Failed to start auto recording after 3 attempts");
-              chrome.tabs.remove(recorderTab.id);
-              chrome.tabs.sendMessage(tabId, { action: "hideRecordingPopup" });
-              
-              // Send failure response back to content script
-              chrome.tabs.sendMessage(tabId, {
-                action: "autoRecordingFailed"
-              });
-            }
-          } else {
-            console.log("✅ Auto recording started successfully");
-            currentRecordingTab = tabId;
-          }
-        });
-      };
       
       // Give recorder tab more time to load
-      setTimeout(() => startRecording(), 2000);
+      const startRecordingWithRetry = (retry = 0) => {
+  chrome.tabs.sendMessage(recorderTab.id, { 
+    action: "startRecording", 
+    tabId: tabId,
+    autoRecord: true
+  }, (response) => {
+
+    if (chrome.runtime.lastError) {
+      console.log(`⏳ Recorder not ready (try ${retry + 1})`);
+
+      if (retry < 5) {
+        setTimeout(() => startRecordingWithRetry(retry + 1), 1000);
+      } else {
+        console.error("❌ Recorder failed to start after retries");
+      }
+
+    } else {
+      console.log("✅ Auto recording started successfully");
+    }
+  });
+};
+
+// Start after small delay
+setTimeout(() => startRecordingWithRetry(), 1500);
     });
   });
 }
