@@ -11,15 +11,19 @@ console.log("🎬 Recorder tab loaded");
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("📨 Recorder received:", message.action);
+  console.log("📨📨📨 RECORDER TAB MESSAGE RECEIVED 📨📨📨");
+  console.log("Message:", message);
+  console.log("Sender:", sender);
   
   if (message.action === "startRecording") {
+    console.log("🎬 START RECORDING message received");
     isAutoRecord = message.autoRecord || false;
     startRecording(message.tabId);
     sendResponse({ success: true });
   }
   
   if (message.action === "stopRecording") {
+    console.log("🛑🛑🛑 STOP RECORDING MESSAGE RECEIVED - EXECUTING NOW!!! 🛑🛑🛑");
     stopRecording();
     sendResponse({ success: true });
   }
@@ -44,41 +48,31 @@ async function startRecording(tabId) {
 
     // Get tab stream using the provided tabId
     const tabStream = await new Promise((resolve, reject) => {
-      chrome.tabCapture.capture({
-        audio: true,
-        video: true,
-        audioConstraints: {
-          mandatory: {
-            chromeMediaSource: 'tab',
-            chromeMediaSourceId: tabId,
-            echoCancellation: true
-          }
-        },
-        videoConstraints: {
-          mandatory: {
-            chromeMediaSource: 'tab', 
-            chromeMediaSourceId: tabId,
-            minWidth: 1280,
-            minHeight: 720,
-            maxWidth: 1920,
-            maxHeight: 1080,
-            maxFrameRate: 30
-          }
-        }
-      }, (stream) => {
-        if (chrome.runtime.lastError) {
-          console.error("❌ Tab capture error:", chrome.runtime.lastError);
-          reject(new Error(chrome.runtime.lastError.message || "Tab capture failed"));
-          return;
-        }
-        if (!stream) {
-          reject(new Error("Could not capture tab stream - no stream returned"));
-          return;
-        }
-        console.log("✅ Tab stream captured successfully");
-        resolve(stream);
-      });
-    });
+  console.log("🎬 Capturing tab using SIMPLE method");
+
+  chrome.tabCapture.capture({
+    audio: true,
+    video: true
+  }, (stream) => {
+
+    console.log("📌 Tab capture callback fired");
+
+    if (chrome.runtime.lastError) {
+      console.error("❌ Tab capture error:", chrome.runtime.lastError);
+      reject(new Error(chrome.runtime.lastError.message));
+      return;
+    }
+
+    if (!stream) {
+      console.error("❌ No stream returned");
+      reject(new Error("No stream"));
+      return;
+    }
+
+    console.log("✅ Tab stream captured successfully");
+    resolve(stream);
+  });
+});
 
     console.log("✅ Tab stream captured, tracks:", tabStream.getTracks().length);
 
@@ -127,6 +121,9 @@ async function startRecording(tabId) {
     }
 
     // Setup MediaRecorder
+    console.log("📹 Setting up MediaRecorder");
+    console.log("📊 Final stream tracks - Video:", finalStream.getVideoTracks().length, "Audio:", finalStream.getAudioTracks().length);
+    
     const mimeTypes = [
       'video/webm;codecs=vp9,opus',
       'video/webm;codecs=vp8,opus', 
@@ -138,17 +135,32 @@ async function startRecording(tabId) {
     for (const type of mimeTypes) {
       if (MediaRecorder.isTypeSupported(type)) {
         supportedType = type;
+        console.log("✅ Supported MIME type found:", supportedType);
         break;
       }
     }
     
     console.log("🎥 Using MIME type:", supportedType);
 
-    mediaRecorder = new MediaRecorder(finalStream, {
-      mimeType: supportedType,
-      videoBitsPerSecond: 2500000,
-      audioBitsPerSecond: 128000
-    });
+    try {
+      mediaRecorder = new MediaRecorder(finalStream, {
+        mimeType: supportedType,
+        videoBitsPerSecond: 2500000,
+        audioBitsPerSecond: 128000
+      });
+      console.log("✅ MediaRecorder created successfully");
+    } catch (recordError) {
+      console.error("❌ Failed to create MediaRecorder:", recordError);
+      // Fallback: try without MIME type
+      console.warn("⚠️ Trying MediaRecorder without MIME type...");
+      try {
+        mediaRecorder = new MediaRecorder(finalStream);
+        console.log("✅ MediaRecorder created (no MIME type)");
+      } catch (fallbackError) {
+        console.error("❌ Failed to create MediaRecorder even without MIME type:", fallbackError);
+        throw new Error("Cannot create MediaRecorder: " + fallbackError.message);
+      }
+    }
 
     recordedChunks = [];
     isRecording = true;
@@ -194,7 +206,11 @@ async function startRecording(tabId) {
     chrome.runtime.sendMessage({ action: "recordingStarted" });
 
   } catch (error) {
-    console.error("❌ Recording start failed:", error);
+    console.error("❌ Recording start FAILED with error:", error);
+    console.error("❌ Error name:", error.name);
+    console.error("❌ Error message:", error.message);
+    console.error("❌ Error stack:", error.stack);
+    
     document.getElementById("status").textContent = "❌ Recording failed: " + error.message;
     
     // Hide recording popup on error
@@ -220,15 +236,16 @@ async function startRecording(tabId) {
 }
 
 function stopRecording() {
-  if (mediaRecorder && isRecording) {
-    console.log("🛑 Stopping recording...");
+  console.log("🛑 STOP RECORDING called");
+  
+  if (!mediaRecorder) return;
+  
+  if (mediaRecorder.state === 'recording') {
+    isRecording = false;
     mediaRecorder.stop();
-    
-    // Hide recording popup
-    chrome.runtime.sendMessage({ action: "hideRecordingPopup" });
-  } else {
-    console.log("⚠️ No active recording to stop");
   }
+  
+  chrome.runtime.sendMessage({ action: "hideRecordingPopup" });
 }
 
 function startTimer() {
@@ -267,17 +284,22 @@ function stopTimer() {
 }
 
 function downloadRecording() {
+  console.log("💾💾💾 DOWNLOAD RECORDING CALLED 💾💾💾");
+  console.log("📊 Chunks available:", recordedChunks.length);
+  
   if (recordedChunks.length === 0) {
-    console.warn("⚠️ No recorded data");
-    document.getElementById("status").textContent = "❌ No recording data";
+    console.warn("⚠️ No recorded data - cannot download");
+    document.getElementById("status").textContent = "❌ No recording data to save";
     cleanup();
     return;
   }
 
   try {
-    console.log("💾 Preparing download, chunks:", recordedChunks.length);
+    console.log("💾 Creating Blob from", recordedChunks.length, "chunks");
     
     const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    console.log("✅ Blob created, size:", blob.size, "bytes");
+    
     const url = URL.createObjectURL(blob);
     const timestamp = new Date().toISOString()
       .replace(/[:.]/g, '-')
@@ -285,7 +307,8 @@ function downloadRecording() {
       .split('Z')[0];
     const filename = `zoom-recording-${timestamp}.webm`;
 
-    console.log("💾 Downloading:", filename);
+    console.log("💾 DOWNLOADING NOW:", filename);
+    console.log("📊 File size:", blob.size, "bytes");
 
     // Download automatically without "Save As" popup
     chrome.downloads.download({
@@ -293,113 +316,41 @@ function downloadRecording() {
       filename: filename
     }, (downloadId) => {
       if (chrome.runtime.lastError) {
-        console.error("❌ Download error:", chrome.runtime.lastError);
+        console.error("❌ DOWNLOAD ERROR:", chrome.runtime.lastError);
+        document.getElementById("status").textContent = "❌ Download error: " + chrome.runtime.lastError.message;
         fallbackDownload(blob, filename);
       } else {
-        console.log("✅ Download started with ID:", downloadId);
+        console.log("✅✅✅ DOWNLOAD STARTED WITH ID:", downloadId, "✅✅✅");
         document.getElementById("status").textContent = "✅ Recording saved to Downloads!";
         downloadCompleted = true;
         
+        // Mark chunks as downloaded to prevent redownload
+        recordedChunks = [];
+        
         // Cleanup after successful download
         setTimeout(() => {
+          console.log("🧹 Cleaning up after download");
           cleanup();
         }, 2000);
       }
     });
 
   } catch (error) {
-    console.error("❌ Download failed:", error);
-    document.getElementById("status").textContent = "❌ Download failed";
+    console.error("Download failed:", error);
     cleanup();
   }
-}
-
-function fallbackDownload(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-  document.getElementById("status").textContent = "✅ Recording saved to Downloads!";
-  downloadCompleted = true;
-  
-  // Cleanup after successful download
-  setTimeout(() => {
-    cleanup();
-  }, 2000);
 }
 
 function cleanup() {
+  console.log("Cleanup");
   isRecording = false;
-  
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-
-  if (mediaRecorder && mediaRecorder.stream) {
-    mediaRecorder.stream.getTracks().forEach(track => {
-      track.stop();
-      console.log("🛑 Stopped track:", track.kind);
-    });
-  }
-  
   recordedChunks = [];
   
-  // Clear storage
-  chrome.storage.local.remove(['isRecording', 'recordingTime', 'recordingStartTime']);
+  if (timerInterval) clearInterval(timerInterval);
+  if (mediaRecorder && mediaRecorder.stream) {
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  }
   
-  // Notify background
+  chrome.storage.local.remove(['isRecording', 'recordingTime']);
   chrome.runtime.sendMessage({ action: "recordingStopped" });
-  
-  document.getElementById("status").textContent = "✅ Recording completed and downloaded";
-  
-  // Only close tab if download completed and it's auto record
-  if (isAutoRecord && downloadCompleted) {
-    setTimeout(() => {
-      console.log("🔒 Closing recorder tab after successful download");
-      window.close();
-    }, 2000);
-  }
 }
-
-// Handle tab close - ensure download completes
-window.addEventListener('beforeunload', (event) => {
-  if (isRecording && !downloadCompleted) {
-    console.log("⚠️ Tab closing during recording - forcing download");
-    
-    // Stop recording and force download
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop();
-    }
-    
-    // Prevent immediate close to allow download to complete
-    event.preventDefault();
-    event.returnValue = '';
-    
-    // Show message to user
-    document.getElementById("status").textContent = "🔄 Finishing download before closing...";
-    
-    // Wait for download to complete then close
-    const checkDownload = setInterval(() => {
-      if (downloadCompleted) {
-        clearInterval(checkDownload);
-        window.close();
-      }
-    }, 500);
-    
-    return "Recording is being saved. Please wait...";
-  }
-});
-
-// Keep this tab alive
-setInterval(() => {
-  if (isRecording) {
-    console.log("💓 Recorder tab keep-alive");
-  }
-}, 30000);
