@@ -3,7 +3,15 @@ let recordingStarted = false;
 let autoRecordEnabled = false;
 let meetingStartTimeout = null;
 let ignoreAutoStopUntil = 0; // Timestamp to ignore auto-stop after small X click
+function isMeetingPage() {
+  const url = location.href;
 
+  return url.includes("/wc/") && (
+    url.includes("/join") ||
+    url.includes("/start") ||
+    url.match(/\/wc\/\d+/)
+  );
+}
 console.log("✅ CONTENT.JS LOADED");
 
 // Check auto record permission on load
@@ -21,7 +29,7 @@ async function checkAutoRecordPermission() {
 }
 
 // DETECT MEETING USING MAIN CONTAINER
-function setupNewMeetingDetection() {
+/*function setupNewMeetingDetection() {
   console.log("🎯 Setting up New Meeting detection...");
 
   function attachListener() {
@@ -51,7 +59,7 @@ function setupNewMeetingDetection() {
 
   // Keep checking (Zoom loads dynamically)
   setInterval(attachListener, 2000);
-}
+}*/
 
 
 // DIRECT AGGRESSIVE BUTTON DETECTION
@@ -239,20 +247,22 @@ function startMeetingWithDelay() {
   }, 3000);
 }
 
-function meetingStarted() {
-  if (isInMeeting && recordingStarted) return; // prevent duplicate
+async function meetingStarted() {
+  if (isInMeeting && recordingStarted) return;
 
   console.log("🎯 MEETING STARTED");
   isInMeeting = true;
-  
-  // Attach button listeners when meeting starts
+
   setupEndButtonDetection();
-  
+
+  // 🔥 IMPORTANT FIX
+  await checkAutoRecordPermission();
+
   if (autoRecordEnabled && !recordingStarted) {
     console.log("🎬 AUTO RECORDING STARTING");
     startAutoRecording();
   }
-  
+
   showMeetingNotification("started");
   chrome.storage.local.set({ isInMeeting: isInMeeting });
 }
@@ -524,7 +534,7 @@ window.addEventListener('load', () => {
 // Initial setup
 setTimeout(() => {
   console.log("🔧 Starting Auto Recorder...");
-  setupNewMeetingDetection();;
+  //setupNewMeetingDetection();;
   setupEndButtonDetection();
   setupURLChangeDetection();
   console.log("✅ Auto Recorder initialized");
@@ -532,3 +542,18 @@ setTimeout(() => {
 }, 1000);
 
 console.log("🔍 Auto Recorder content script loaded");
+
+setInterval(() => {
+  const inMeeting = isMeetingPage();
+
+  if (inMeeting && !isInMeeting) {
+    console.log("🎯 Meeting detected (universal)");
+    meetingStarted();
+  }
+
+  if (!inMeeting && isInMeeting) {
+    console.log("🛑 Meeting ended (universal)");
+    meetingEnded();
+  }
+
+}, 1000);
