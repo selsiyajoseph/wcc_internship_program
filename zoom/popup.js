@@ -111,33 +111,42 @@ function updateButtonStates() {
 document.getElementById('autoRecordToggle').addEventListener('change', async (e) => {
   const enabled = e.target.checked;
   
-  if (enabled) {
-    // Ask for user confirmation
-    const confirmed = confirm(`Enable Auto Recording?\n\nThis will automatically start recording when you join Zoom meetings and stop when you leave.\n\nManual recording buttons will be disabled.\n\nYou can disable this anytime in the extension.`);
-    
-    if (confirmed) {
-      try {
-        await chrome.runtime.sendMessage({ action: "grantAutoRecordPermission" });
-        autoRecordEnabled = true;
-        document.getElementById('toggleLabel').textContent = 'ON';
-        document.getElementById('permissionText').textContent = 'Auto recording enabled ✅';
-        
-        // Disable manual buttons
-        updateButtonStates();
-        
-        console.log("✅ Auto recording enabled");
-        
-        // Show success message
-        showPopupMessage("Auto recording enabled! 🎬\nManual buttons disabled", "success");
-      } catch (error) {
-        console.error("❌ Failed to enable auto recording:", error);
-        e.target.checked = false;
-        showPopupMessage("Failed to enable auto recording", "error");
-      }
-    } else {
+ if (enabled) {
+  const confirmed = confirm(`Enable Auto Recording?
+
+This will automatically start recording when you join Zoom meetings.
+
+⚠️ You may be asked for screen permission once.
+
+Continue?`);
+
+  if (confirmed) {
+    try {
+      await chrome.runtime.sendMessage({ action: "grantAutoRecordPermission" });
+
+      // 🔥 IMPORTANT FIX: trigger permission once
+      
+
+      console.log("✅ Media permission granted");
+
+      autoRecordEnabled = true;
+
+      document.getElementById('toggleLabel').textContent = 'ON';
+      document.getElementById('permissionText').textContent = 'Auto recording enabled ✅';
+
+      updateButtonStates();
+
+      showPopupMessage("Auto recording enabled! 🎬", "success");
+
+    } catch (error) {
+      console.error("❌ Permission error:", error);
       e.target.checked = false;
+      showPopupMessage("Permission denied. Auto recording won't work.", "error");
     }
   } else {
+    e.target.checked = false;
+  }
+} else {
     try {
       await chrome.runtime.sendMessage({ action: "revokeAutoRecordPermission" });
       autoRecordEnabled = false;
@@ -259,41 +268,39 @@ document.getElementById("startBtn").addEventListener("click", async () => {
 // Stop Recording
 document.getElementById("stopBtn").addEventListener("click", async () => {
   console.log("🛑 Stop recording clicked");
-  
-  // Check if auto mode is enabled
-  if (autoRecordEnabled) {
-    alert("❌ Manual stop disabled while Auto Mode is ON\nRecording will stop automatically when you leave the meeting");
-    return;
-  }
 
   try {
     document.getElementById("stopBtn").disabled = true;
-    document.getElementById("stopBtn").textContent = "Stopping...";
     document.getElementById("status").textContent = "🟡 Stopping recording...";
 
-    // Find and stop the recorder tab
-    const tabs = await chrome.tabs.query({ url: chrome.runtime.getURL("recorder.html") });
-    if (tabs.length > 0) {
-      chrome.tabs.sendMessage(tabs[0].id, { action: "stopRecording" }, (response) => {
+    // 🔥 Get ALL tabs
+    const tabs = await chrome.tabs.query({});
+
+    // 🔥 Find recorder tabs safely
+    const recorderTabs = tabs.filter(tab =>
+      tab.url && tab.url.includes("recorder.html")
+    );
+
+    if (recorderTabs.length === 0) {
+      console.warn("⚠️ No recorder tabs found!");
+      return;
+    }
+
+    console.log(`🛑 Found ${recorderTabs.length} recorder tab(s)`);
+
+    // 🔥 Send STOP to ALL recorder tabs
+    recorderTabs.forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, { action: "stopRecording" }, (res) => {
         if (chrome.runtime.lastError) {
-          console.error("❌ Failed to stop recording:", chrome.runtime.lastError);
-          document.getElementById("status").textContent = "❌ Stop failed";
-          showPopupMessage("Failed to stop recording", "error");
+          console.error("❌ Failed to stop:", chrome.runtime.lastError);
+        } else {
+          console.log("✅ Stop signal sent to tab:", tab.id);
         }
       });
-    } else {
-      // If recorder tab not found, clear storage
-      await chrome.storage.local.remove(['isRecording', 'recordingTime']);
-      updateUIForReady();
-      console.log("⚠️ No recorder tab found");
-    }
-    
+    });
+
   } catch (error) {
-    console.error("❌ Stop recording failed:", error);
-    document.getElementById("status").textContent = "❌ Stop failed";
-    alert("Failed to stop recording: " + error.message);
-    updateUIForReady();
-    showPopupMessage("Failed to stop recording", "error");
+    console.error("❌ Stop failed:", error);
   }
 });
 
