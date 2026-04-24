@@ -2,43 +2,72 @@ let isInMeeting = false;
 let recordingStarted = false;
 let autoRecordEnabled = false;
 let meetingStartTimeout = null;
-let ignoreAutoStopUntil = 0; // Timestamp to ignore auto-stop after small X click
+let ignoreAutoStopUntil = 0;
+let meetingEndedByUser = false; // ADD THIS - around line 9
+// MUTE DETECTION VARIABLES
+let micActivityCheckInterval = null;
+let micMonitoringActive = false;
+
+// ============================================
+// SMART GUARD: Only run on meeting-relevant pages
+// ============================================
+const currentURL = window.location.href;
+
+const isEmbedPage = currentURL.includes('/wb/embed/');
+const isEmptyFrame = currentURL.includes('/pwa-empty-page');
+const isDocsFrame = currentURL.includes('/docs') && !currentURL.includes('/start');
+const isDriveFrame = currentURL.includes('/drive') && !currentURL.includes('/start');
+const isHomePage = currentURL.includes('/wc/home');
+
+// Handle recording on meeting pages and meeting iframes, NOT home page
+const isMeetingURL = (currentURL.match(/\/wc\/\d+\/start/) || 
+                      currentURL.match(/\/wc\/\d+\/join/) ||
+                      currentURL.includes('/webmeeting'));
+
+const shouldHandleRecording = isMeetingURL && 
+                               !isEmbedPage && 
+                               !isEmptyFrame && 
+                               !isDocsFrame && 
+                               !isDriveFrame;
+
+console.log("✅ CONTENT.JS LOADED");
+console.log("📍 URL:", currentURL);
+console.log("📍 Should handle recording:", shouldHandleRecording);
+
 function isMeetingPage() {
   const url = location.href;
-
+  if (url.includes('/wb/embed/')) return false;
+  if (url.includes('/wc/home')) return false; // Don't detect home as meeting
+  
   return url.includes("/wc/") && (
     url.includes("/join") ||
     url.includes("/start") ||
     url.match(/\/wc\/\d+/)
   );
 }
-console.log("✅ CONTENT.JS LOADED");
 
-// Check if we're inside the meeting iframe
-const isInMeetingIframe = window.location.href.includes('/start/webmeeting') || 
-                          window.location.href.includes('/join/webmeeting');
-
-console.log("📍 Running in:", isInMeetingIframe ? "MEETING IFRAME" : "MAIN PAGE");
-
-// If we're in the main page, inject into iframe
-if (!isInMeetingIframe) {
-  console.log("🖼️ Main page detected - looking for meeting iframe...");
-  
-  // Keep checking for the meeting iframe
-  const iframeCheckInterval = setInterval(() => {
-    const meetingIframe = document.getElementById('webclient');
-    if (meetingIframe) {
-      console.log("✅ Found meeting iframe #webclient");
-      clearInterval(iframeCheckInterval);
-      
-      // Iframe found - content script will auto-run there due to all_frames:true
-    }
-  }, 1000);
+// Only initialize if we should handle recording
+if (shouldHandleRecording) {
+  console.log("🔐 Checking auto-record permission...");
+  checkAutoRecordPermission();
+} else {
+  console.log("⏭️ Skipping - not a meeting page (embed/dashboard/empty frame)");
 }
 
-// Check auto record permission on load
-console.log("🔐 Checking auto-record permission...");
-checkAutoRecordPermission();
+function isMeetingPage() {
+  const url = location.href;
+  return url.includes("/wc/") && (
+    url.includes("/join") ||
+    url.includes("/start") ||
+    url.match(/\/wc\/\d+/)
+  );
+}
+
+// Only check auto record permission if we're handling recording
+if (shouldHandleRecording) {
+  console.log("🔐 Checking auto-record permission...");
+  checkAutoRecordPermission();
+}
 
 async function checkAutoRecordPermission() {
   return new Promise((resolve) => {
@@ -50,87 +79,36 @@ async function checkAutoRecordPermission() {
   });
 }
 
-// DETECT MEETING USING MAIN CONTAINER
-/*function setupNewMeetingDetection() {
-  console.log("🎯 Setting up New Meeting detection...");
-
-  function attachListener() {
-    const newMeetingBtn = document.querySelector('button[aria-label="New meeting"]');
-
-    if (newMeetingBtn && !newMeetingBtn.hasAttribute('data-listener')) {
-      newMeetingBtn.setAttribute('data-listener', 'true');
-
-      newMeetingBtn.addEventListener('click', () => {
-        console.log("🚀 New Meeting button clicked");
-
-        // Wait for Zoom to load meeting
-        setTimeout(() => {
-          console.log("🎬 Triggering auto recording after New Meeting click");
-
-          isInMeeting = true;
-          meetingStarted();   // 🔥 THIS is the key
-        }, 3000);
-      });
-
-      console.log("✅ New Meeting listener attached");
-    }
-  }
-
-  // Run immediately
-  attachListener();
-
-  // Keep checking (Zoom loads dynamically)
-  setInterval(attachListener, 2000);
-}*/
-
-
-// DIRECT AGGRESSIVE BUTTON DETECTION
 function setupEndButtonDetection() {
+  if (!shouldHandleRecording) return;
+  
   console.log("🖱️ SHADOW DOM LEAVE BUTTON DETECTION - ACTIVATED!");
   
-  // ============================================================
-  // FUNCTION: SEARCH THROUGH SHADOW DOM RECURSIVELY
-  // ============================================================
   function findInShadow(element, searchText) {
     try {
-      // Check this element's text
       if (element.textContent && element.textContent.toLowerCase().includes(searchText.toLowerCase())) {
         return element;
       }
-      
-      // Check children
       if (element.children) {
         for (let child of element.children) {
           const result = findInShadow(child, searchText);
           if (result) return result;
         }
       }
-      
-      // Check Shadow DOM if exists
       if (element.shadowRoot) {
         for (let child of element.shadowRoot.children) {
           const result = findInShadow(child, searchText);
           if (result) return result;
         }
       }
-    } catch (e) {
-      // Ignore errors from restricted shadow roots
-    }
-    
+    } catch (e) {}
     return null;
   }
   
-  // ============================================================
-  // DIRECT BUTTON DETECTION - KEEP RETRYING
-  // ============================================================
   function attachLeaveButtonListener() {
-    // EXACT SELECTOR 1: Leave Meeting button
     const leaveBtn = document.querySelector('#wc-footer > div.footer__inner.leave-option-container > div:nth-child(1) > div > div > button:nth-child(2)');
-    
-    // EXACT SELECTOR 2: End Meeting for All button
     const endForAllBtn = document.querySelector('#wc-footer > div.footer__inner.leave-option-container > div:nth-child(1) > div > div > button.zmu-btn.leave-meeting-options__btn.leave-meeting-options__btn--default.leave-meeting-options__btn--danger.zmu-btn--default.zmu-btn__outline--white');
     
-    // If not found, search inside .leave-option-container for any buttons
     let leaveBtn2 = leaveBtn;
     let endForAllBtn2 = endForAllBtn;
     
@@ -138,25 +116,19 @@ function setupEndButtonDetection() {
       const container = document.querySelector('.leave-option-container');
       if (container) {
         const btns = container.querySelectorAll('button');
-        console.log(`🔍 Found ${btns.length} buttons in leave-option-container`);
-        
-        btns.forEach((btn, idx) => {
+        btns.forEach((btn) => {
           const text = btn.textContent.toLowerCase().trim();
           const classes = btn.className;
-          
           if (!leaveBtn2 && (text === 'leave meeting' || text.includes('leave'))) {
             leaveBtn2 = btn;
-            console.log(`✅ Button ${idx} IDENTIFIED AS LEAVE: "${text}"`);
           }
           if (!endForAllBtn2 && (text === 'end meeting for all' || classes.includes('leave-meeting-options__btn--danger'))) {
             endForAllBtn2 = btn;
-            console.log(`✅ Button ${idx} IDENTIFIED AS END FOR ALL: "${text}"`);
           }
         });
       }
     }
     
-    // Attach to Leave Meeting button
     if (leaveBtn2 && !leaveBtn2.hasAttribute('data-leave-listener')) {
       leaveBtn2.setAttribute('data-leave-listener', 'true');
       leaveBtn2.addEventListener('click', () => {
@@ -166,7 +138,6 @@ function setupEndButtonDetection() {
       console.log("✅ LISTENER ATTACHED TO LEAVE MEETING BUTTON");
     }
     
-    // Attach to End Meeting for All button
     if (endForAllBtn2 && !endForAllBtn2.hasAttribute('data-end-listener')) {
       endForAllBtn2.setAttribute('data-end-listener', 'true');
       endForAllBtn2.addEventListener('click', () => {
@@ -177,10 +148,7 @@ function setupEndButtonDetection() {
     }
   }
   
-  // Attach listener immediately
   attachLeaveButtonListener();
-  
-  // Also search periodically in case buttons appear later (after joining)
   setInterval(() => {
     attachLeaveButtonListener();
   }, 2000);
@@ -188,55 +156,34 @@ function setupEndButtonDetection() {
   console.log("✅ Shadow DOM Leave button detection active");
 }
 
-// BACKUP: DETECT URL CHANGES (MEETING LEFT/ENDED)
 function setupURLChangeDetection() {
+  if (!shouldHandleRecording) return;
+  
   console.log("🌐 Setting up URL change detection...");
-  
   let lastURL = window.location.href;
-  console.log("🌐 Initial URL:", lastURL);
   
-  // Monitor for URL changes
   const urlCheckInterval = setInterval(() => {
     const currentURL = window.location.href;
-    
     if (currentURL !== lastURL) {
-      console.log("🔄 URL CHANGED:", { 
-        from: lastURL, 
-        to: currentURL,
-        isInMeeting: isInMeeting,
-        recordingStarted: recordingStarted
-      });
-      
-      // Check if we left a meeting page
       const wasMeetingURL = lastURL.includes('/wc/') && (
         lastURL.includes('/start') || 
         lastURL.includes('/join') ||
         lastURL.match(/\/wc\/\d+/)
       );
-      
       const isMeetingURL = currentURL.includes('/wc/') && (
         currentURL.includes('/start') || 
         currentURL.includes('/join') ||
         currentURL.match(/\/wc\/\d+/)
       );
       
-      console.log("🔄 URL Analysis:", {
-        wasMeetingURL: wasMeetingURL,
-        isMeetingURL: isMeetingURL,
-        shouldStop: wasMeetingURL && !isMeetingURL && isInMeeting
-      });
-      
-      // If we were in a meeting and now we're not, stop recording
       if (wasMeetingURL && !isMeetingURL && isInMeeting) {
-        // BLOCK if small X button was just clicked
         if (Date.now() < ignoreAutoStopUntil) {
-          console.log("⏱️ URL CHANGE AUTO-STOP BLOCKED - small X button was clicked");
+          console.log("⏱️ URL CHANGE AUTO-STOP BLOCKED");
           return;
         }
         console.log("🛑 *** URL CHANGED FROM MEETING TO HOME - USER LEFT MEETING! ***");
         stopRecording();
       }
-      
       lastURL = currentURL;
     }
   }, 500);
@@ -244,10 +191,9 @@ function setupURLChangeDetection() {
   console.log("✅ URL change detection active");
 }
 
-// Also monitor for navigation events
 window.addEventListener('beforeunload', () => {
-  if (isInMeeting && recordingStarted) {
-    console.log("🚨 PAGE UNLOADING WHILE IN MEETING - FORCE STOPPING RECORDING");
+  if (isInMeeting && recordingStarted && shouldHandleRecording) {
+    console.log("🚨 PAGE UNLOADING - FORCE STOPPING");
     chrome.runtime.sendMessage({ action: "autoStopRecording" }).catch(e => {
       console.log("⚠️ Could not send stop message:", e);
     });
@@ -255,6 +201,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 function startMeetingWithDelay() {
+  if (!shouldHandleRecording) return;
   if (isInMeeting) return;
   
   if (meetingStartTimeout) {
@@ -262,7 +209,6 @@ function startMeetingWithDelay() {
   }
   
   console.log("⏰ Starting 3-second delay before recording...");
-  
   meetingStartTimeout = setTimeout(() => {
     console.log("⏰ 3-second delay completed - starting meeting");
     meetingStarted();
@@ -270,16 +216,22 @@ function startMeetingWithDelay() {
 }
 
 async function meetingStarted() {
+  if (!shouldHandleRecording) return;
+  
+  // Don't start if user just ended meeting
+  if (meetingEndedByUser) {
+    console.log("⏭️ Skipping - meeting was just ended by user");
+    return;
+  }
+  
   if (isInMeeting && recordingStarted) return;
 
   console.log("🎯 MEETING STARTED");
   isInMeeting = true;
 
   setupEndButtonDetection();
-
-  // ADD THIS LINE HERE
   startMicrophoneMonitoring();
-  // 🔥 IMPORTANT FIX
+
   await checkAutoRecordPermission();
 
   if (autoRecordEnabled && !recordingStarted) {
@@ -292,70 +244,59 @@ async function meetingStarted() {
 }
 
 function stopRecording() {
-  console.log("🛑🛑🛑 STOP RECORDING CALLED - AGGRESSIVE MODE! 🛑🛑🛑");
-  console.log("📊 Current state:", {
-    isInMeeting: isInMeeting,
-    recordingStarted: recordingStarted,
-    meetingStartTimeout: meetingStartTimeout
-  });
+  if (!shouldHandleRecording) return;
   
-  // FORCE STOP - Send stop message directly to background
-  console.log("📤 SENDING DIRECT STOP MESSAGE TO BACKGROUND");
+  console.log("🛑🛑🛑 STOP RECORDING CALLED 🛑🛑🛑");
+  
   chrome.runtime.sendMessage({ action: "autoStopRecording" }, (response) => {
-    console.log("✅ STOP MESSAGE SENT - Response:", response);
-    if (chrome.runtime.lastError) {
-      console.error("❌ Error sending stop message:", chrome.runtime.lastError);
-    }
+    console.log("✅ STOP MESSAGE SENT");
   });
   
-  // Also clear timeout if exists
   if (meetingStartTimeout) {
     clearTimeout(meetingStartTimeout);
     meetingStartTimeout = null;
-    console.log("✅ Cleared meeting start timeout");
   }
   
-  // Mark recording as stopped locally
   recordingStarted = false;
   isInMeeting = false;
+  stopMicrophoneMonitoring();
   
-  console.log("✅ STOP RECORDING AGGRESSIVE SEQUENCE COMPLETE");
+  console.log("✅ STOP RECORDING SEQUENCE COMPLETE");
 }
 
 function meetingEnded() {
+  if (!shouldHandleRecording) return;
   if (!isInMeeting) return;
   
-  // ============================================================
-  // SKIP AUTO-STOP if small X button was clicked (ignore for 5 seconds)
-  // ============================================================
+  // SET FLAG - Meeting ended by user action
+  meetingEndedByUser = true;
+  
   if (Date.now() < ignoreAutoStopUntil) {
-    console.log("⏱️ Auto-stop BLOCKED - small X button was clicked, waiting for user action");
+    console.log("⏱️ Auto-stop BLOCKED");
     return;
   }
   
-  console.log("🎯 MEETING ENDED - EXECUTING STOP SEQUENCE");
-  console.log("📊 Current state:", {
-    isInMeeting: isInMeeting,
-    recordingStarted: recordingStarted
-  });
-  
+  console.log("🎯 MEETING ENDED");
   isInMeeting = false;
-  stopMicrophoneMonitoring(); // ← ADD THIS LINE
+  stopMicrophoneMonitoring();
+  
   if (recordingStarted) {
-    console.log("⏹️ RECORDING ACTIVE - STOPPING AND DOWNLOADING NOW");
+    console.log("⏹️ RECORDING ACTIVE - STOPPING");
     stopAutoRecording();
-  } else {
-    console.log("ℹ️ Recording not active - just marking meeting as ended");
   }
   
   recordingStarted = false;
   showMeetingNotification("ended");
   chrome.storage.local.set({ isInMeeting: isInMeeting });
   
-  console.log("✅ Meeting ended sequence complete");
+  // Reset flag after 5 seconds
+  setTimeout(() => {
+    meetingEndedByUser = false;
+  }, 5000);
 }
 
 function startAutoRecording() {
+  if (!shouldHandleRecording) return;
   if (recordingStarted) return;
   
   console.log("🎬 Starting auto recording...");
@@ -377,30 +318,33 @@ function startAutoRecording() {
   });
 }
 
-function stopAutoRecording() {
-  if (!recordingStarted) return;
+function stopRecording() {
+  if (!shouldHandleRecording) return;
   
-  console.log("🛑 STOPPING AUTO RECORDING - SENDING STOP MESSAGE TO BACKGROUND...");
+  // SET FLAG
+  meetingEndedByUser = true;
   
-  hideRecordingPopup();
+  console.log("🛑🛑🛑 STOP RECORDING CALLED 🛑🛑🛑");
   
   chrome.runtime.sendMessage({ action: "autoStopRecording" }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error("❌ ERROR sending stop message:", chrome.runtime.lastError);
-    } else {
-      console.log("✅ Stop message sent to background, response:", response);
-      recordingStarted = false;
-      showRecordingNotification("stopped");
-    }
+    console.log("✅ STOP MESSAGE SENT");
   });
   
-  // Force timeout backup stop after 2 seconds if message doesn't work
+  if (meetingStartTimeout) {
+    clearTimeout(meetingStartTimeout);
+    meetingStartTimeout = null;
+  }
+  
+  recordingStarted = false;
+  isInMeeting = false;
+  stopMicrophoneMonitoring();
+  
+  // Reset flag after 5 seconds
   setTimeout(() => {
-    if (recordingStarted) {
-      console.log("⚠️ Recording still active after 2s - retrying stop message");
-      chrome.runtime.sendMessage({ action: "autoStopRecording" });
-    }
-  }, 2000);
+    meetingEndedByUser = false;
+  }, 5000);
+  
+  console.log("✅ STOP RECORDING SEQUENCE COMPLETE");
 }
 
 function resetRecordingState() {
@@ -420,7 +364,6 @@ function showMeetingNotification(type) {
 
   const notification = document.createElement('div');
   notification.id = 'meeting-status-notification';
-  
   const currentTime = new Date().toLocaleTimeString();
   
   if (type === "started") {
@@ -457,7 +400,6 @@ function showRecordingNotification(type) {
   notification.textContent = type === 'started' 
     ? '🔴 Recording Started' 
     : '⏹️ Recording Stopped - Downloading...';
-  
   document.body.appendChild(notification);
   setTimeout(() => notification.remove(), 4000);
 }
@@ -496,7 +438,6 @@ function showRecordingPopup() {
   const style = document.createElement('style');
   style.textContent = `@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }`;
   document.head.appendChild(style);
-
   document.body.appendChild(popup);
 }
 
@@ -510,8 +451,76 @@ function hideRecordingPopup() {
   if (popup) popup.remove();
 }
 
-// Listen for messages
+// ============================================
+// MUTE DETECTION (IFRAME MODE)
+// ============================================
+function startMicrophoneMonitoring() {
+  if (!shouldHandleRecording) return;
+  if (micMonitoringActive) return;
+  
+  console.log("🎤🎤🎤 STARTING MUTE DETECTION 🎤🎤🎤");
+  micMonitoringActive = true;
+  
+  let lastMuteState = null;
+  
+  micActivityCheckInterval = setInterval(() => {
+    const muteBtn = document.querySelector(
+      'button[aria-label*="mute my microphone"], button[aria-label*="unmute my microphone"]'
+    );
+    
+    if (muteBtn) {
+      const label = muteBtn.getAttribute('aria-label') || '';
+      const isMuted = label.toLowerCase().includes('unmute');
+      
+      if (isMuted !== lastMuteState) {
+        lastMuteState = isMuted;
+        console.log(`🎤🎤🎤 MUTE STATE: ${isMuted ? '🔇 MUTED' : '🔊 UNMUTED'} 🎤🎤🎤`);
+        console.log(`  Button label: "${label}"`);
+        
+        chrome.runtime.sendMessage({
+          action: "zoomMuteChanged",
+          muted: isMuted
+        });
+      }
+    }
+  }, 300);
+}
+
+function stopMicrophoneMonitoring() {
+  if (micActivityCheckInterval) {
+    clearInterval(micActivityCheckInterval);
+    micActivityCheckInterval = null;
+  }
+  micMonitoringActive = false;
+}
+
+function watchForMeetingUI() {
+  if (!shouldHandleRecording) return;
+  
+  console.log("👀 Watching for meeting UI to load...");
+  
+  const observer = new MutationObserver(() => {
+    const meetingFooter = document.querySelector('.footer-button-base__button, [class*="footer"]');
+    if (meetingFooter && !micMonitoringActive) {
+      console.log("✅ Meeting UI detected! Starting mic monitor...");
+      startMicrophoneMonitoring();
+    }
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
+// ============================================
+// MESSAGE LISTENER
+// ============================================
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!shouldHandleRecording && message.action !== "updateAutoRecordPermission") {
+    return; // Only process recording messages if we're in the right context
+  }
+  
   console.log("📨 Content script received:", message.action);
   
   if (message.action === "updateAutoRecordPermission") {
@@ -546,94 +555,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-// Page load detection
+// ============================================
+// INITIALIZATION
+// ============================================
 window.addEventListener('load', () => {
+  if (!shouldHandleRecording) return;
   console.log("🔄 Page loaded - resetting recording states");
   resetRecordingState();
-  checkAutoRecordPermission().then(() => {
-    console.log("🔄 Auto record permission rechecked:", autoRecordEnabled);
-  });
+  checkAutoRecordPermission();
 });
-
-// ============================================
-// MUTE DETECTION FUNCTIONS
-// ============================================
-
-
-// ============================================
-// MUTE DETECTION BY MICROPHONE MONITORING
-// ============================================
-
-let micActivityCheckInterval = null;
-let micMonitoringActive = false;
-
-
-function startMicrophoneMonitoring() {
-  if (micMonitoringActive) {
-    console.log("⚠️ Mic monitoring already active");
-    return;
-  }
-  
-  console.log("🎤🎤🎤 STARTING MUTE DETECTION (IFRAME MODE) 🎤🎤🎤");
-  micMonitoringActive = true;
-  
-  let lastMuteState = null;
-  
-  // SIMPLE CHECK - We're inside the iframe now!
-  setInterval(() => {
-    // Direct selector - no more shadow DOM needed!
-    const muteBtn = document.querySelector(
-      'button[aria-label*="mute my microphone"], button[aria-label*="unmute my microphone"]'
-    );
-    
-    if (muteBtn) {
-      const label = muteBtn.getAttribute('aria-label') || '';
-      // "unmute my microphone" = currently MUTED
-      const isMuted = label.toLowerCase().includes('unmute');
-      
-      if (isMuted !== lastMuteState) {
-        lastMuteState = isMuted;
-        console.log(`🎤🎤🎤 MUTE STATE: ${isMuted ? '🔇 MUTED' : '🔊 UNMUTED'} 🎤🎤🎤`);
-        console.log(`  Button label: "${label}"`);
-        
-        chrome.runtime.sendMessage({
-          action: "zoomMuteChanged",
-          muted: isMuted
-        });
-      }
-    }
-  }, 300);
-}
-
-function stopMicrophoneMonitoring() {
-  if (micActivityCheckInterval) {
-    clearInterval(micActivityCheckInterval);
-    micActivityCheckInterval = null;
-  }
-  micMonitoringActive = false;
-  console.log("🛑 Microphone monitoring stopped");
-}
-
-function watchForMeetingUI() {
-  console.log("👀 Watching for meeting UI to load...");
-  
-  const observer = new MutationObserver(() => {
-    const meetingFooter = document.querySelector('.footer-button-base__button, [class*="footer"]');
-    
-    if (meetingFooter && !micMonitoringActive) {
-      console.log("✅ Meeting UI detected! Starting mic monitor...");
-      startMicrophoneMonitoring();
-    }
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-}
 
 // Initial setup
 setTimeout(() => {
+  if (!shouldHandleRecording) {
+    console.log("⏭️ Skipping initialization - not in meeting iframe");
+    return;
+  }
+  
   console.log("🔧 Starting Auto Recorder...");
   setupEndButtonDetection();
   setupURLChangeDetection();
@@ -649,19 +587,24 @@ setTimeout(() => {
   console.log("✅ Auto Recorder initialized");
 }, 1000);
 
-console.log("🔍 Auto Recorder content script loaded");
-
+// Periodic meeting detection
 setInterval(() => {
+  if (!shouldHandleRecording) return;
+  
+  // DON'T detect meeting if user just ended one
+  if (meetingEndedByUser) {
+    return;
+  }
+  
   const inMeeting = isMeetingPage();
-
   if (inMeeting && !isInMeeting) {
     console.log("🎯 Meeting detected (universal)");
     meetingStarted();
   }
-
   if (!inMeeting && isInMeeting) {
     console.log("🛑 Meeting ended (universal)");
     meetingEnded();
   }
-
 }, 1000);
+
+console.log("🔍 Auto Recorder content script loaded");
